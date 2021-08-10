@@ -22,7 +22,8 @@ void NoexceptAllTheThingsCheck::registerMatchers(MatchFinder *Finder) {
 
     return;
   }
-  // Walk over the AST and find function declarations
+  // Walk over the AST and find function declarations, which neither have throw
+  // nor noexcept specifier
   Finder->addMatcher(
       functionDecl(
           isExpansionInMainFile(),
@@ -30,16 +31,12 @@ void NoexceptAllTheThingsCheck::registerMatchers(MatchFinder *Finder) {
           unless(hasTypeLoc(loc(functionProtoType(isNoThrow())))))
           .bind("FuncDeclNoexceptMissing"),
       this);
-
-  /// @todo Walk over the AST and find function declaration?
-  // Finder->addMatcher(parmVarDecl().bind("NoexceptMissing"), this);
 }
 
 void NoexceptAllTheThingsCheck::check(const MatchFinder::MatchResult &result) {
   // Add noexcept to all matches
   const auto *MatchedDecl =
       result.Nodes.getNodeAs<FunctionDecl>("FuncDeclNoexceptMissing");
-  SourceRange range;
   SourceLocation location;
 
   auto functionType = MatchedDecl->getType()->getAs<FunctionProtoType>();
@@ -52,30 +49,21 @@ void NoexceptAllTheThingsCheck::check(const MatchFinder::MatchResult &result) {
     location =
         Lexer::getLocForEndOfToken(closingParenthesis, 0, *result.SourceManager,
                                    result.Context->getLangOpts());
-
-    range = location;
   }
 
   if (functionType->getExceptionSpecType() !=
       ExceptionSpecificationType::EST_None) {
     return;
   }
-  assert(range.isValid() && "Exception source range is invalid.");
 
-  CharSourceRange charSourceRange = Lexer::makeFileCharRange(
-      CharSourceRange::getTokenRange(range), *result.SourceManager,
-      result.Context->getLangOpts());
+  assert(location.isValid() && "Location is invalid.");
 
   std::string insertionString = "noexcept";
 
   FixItHint FixIt;
-
   FixIt = FixItHint::CreateInsertion(location, " " + insertionString);
 
-  diag(range.getBegin(), "add 'noexcept'")
-      << Lexer::getSourceText(charSourceRange, *result.SourceManager,
-                              result.Context->getLangOpts())
-      << insertionString << FixIt;
+  diag(location, "'noexcept' missing") << FixIt;
 }
 
 } // namespace misc
