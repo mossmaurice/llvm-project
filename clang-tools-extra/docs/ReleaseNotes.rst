@@ -119,6 +119,11 @@ New checks
 
   Finds calls to ``new`` with missing exception handler for ``std::bad_alloc``.
 
+- New :doc:`misc-noexcept-all-the-things
+  <clang-tidy/checks/misc-noexcept-all-the-things>` check.
+
+  FIXME: add release notes.
+
 New check aliases
 ^^^^^^^^^^^^^^^^^
 
