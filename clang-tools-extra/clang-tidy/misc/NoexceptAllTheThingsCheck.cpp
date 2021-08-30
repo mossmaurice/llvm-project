@@ -10,6 +10,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Lex/Lexer.h"
+#include <iostream>
 
 using namespace clang::ast_matchers;
 
@@ -26,7 +27,7 @@ void NoexceptAllTheThingsCheck::registerMatchers(MatchFinder *Finder) {
   // nor noexcept specifier
   Finder->addMatcher(
       functionDecl(
-          isExpansionInMainFile(),
+          unless(isExpansionInSystemHeader()),
           unless(hasTypeLoc(loc(functionProtoType(hasDynamicExceptionSpec())))),
           unless(hasTypeLoc(loc(functionProtoType(isNoThrow())))))
           .bind("FuncDeclNoexceptMissing"),
@@ -51,19 +52,20 @@ void NoexceptAllTheThingsCheck::check(const MatchFinder::MatchResult &result) {
                                    result.Context->getLangOpts());
   }
 
-  if (functionType->getExceptionSpecType() !=
-      ExceptionSpecificationType::EST_None) {
-    return;
+  if ((functionType->getExceptionSpecType() ==
+       ExceptionSpecificationType::EST_None) ||
+      (functionType->getExceptionSpecType() ==
+       ExceptionSpecificationType::EST_Unevaluated)) {
+
+    assert(location.isValid() && "Location is invalid.");
+
+    std::string insertionString = "noexcept";
+
+    FixItHint FixIt;
+    FixIt = FixItHint::CreateInsertion(location, " " + insertionString);
+
+    diag(location, "'noexcept' missing") << FixIt;
   }
-
-  assert(location.isValid() && "Location is invalid.");
-
-  std::string insertionString = "noexcept";
-
-  FixItHint FixIt;
-  FixIt = FixItHint::CreateInsertion(location, " " + insertionString);
-
-  diag(location, "'noexcept' missing") << FixIt;
 }
 
 } // namespace misc
