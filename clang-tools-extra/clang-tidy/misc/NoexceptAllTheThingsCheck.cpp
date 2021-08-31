@@ -10,6 +10,7 @@
 #include "clang/AST/ASTContext.h"
 #include "clang/ASTMatchers/ASTMatchFinder.h"
 #include "clang/Lex/Lexer.h"
+
 #include <iostream>
 
 using namespace clang::ast_matchers;
@@ -50,6 +51,31 @@ void NoexceptAllTheThingsCheck::check(const MatchFinder::MatchResult &result) {
     location =
         Lexer::getLocForEndOfToken(closingParenthesis, 0, *result.SourceManager,
                                    result.Context->getLangOpts());
+  }
+
+  std::pair<FileID, unsigned> decomposedLoc =
+      result.SourceManager->getDecomposedLoc(location);
+  StringRef file = result.SourceManager->getBufferData(decomposedLoc.first);
+  const char *TokenBegin = file.data() + decomposedLoc.second;
+  Lexer Lexer(result.SourceManager->getLocForStartOfFile(decomposedLoc.first),
+              result.Context->getLangOpts(), file.begin(), TokenBegin,
+              file.end());
+  Token currentToken;
+  while (!Lexer.LexFromRawLexer(currentToken)) {
+    if (currentToken.is(tok::raw_identifier)) {
+      IdentifierInfo &info = result.Context->Idents.get(StringRef(
+          result.SourceManager->getCharacterData(currentToken.getLocation()),
+          currentToken.getLength()));
+      currentToken.setIdentifierInfo(&info);
+      currentToken.setKind(info.getTokenID());
+    }
+
+    if (currentToken.isOneOf(tok::amp, tok::ampamp, tok::kw_const,
+                             tok::kw_volatile, tok::kw_restrict)) {
+      location = currentToken.getEndLoc();
+      continue;
+    }
+    break;
   }
 
   if ((functionType->getExceptionSpecType() ==
